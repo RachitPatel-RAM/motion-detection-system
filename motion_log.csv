@@ -1,0 +1,4 @@
+Timestamp,Event
+2025-07-20 13:34:16,"Motion detected - Size: 263x146px, Snapshot: snapshots\snapshot_1752998656_speedy.jpg, Video: videos\motion_1752998656_speedy.mp4, Speedy: True"
+2025-07-20 13:35:52,"Motion detected - Size: 216x51px, Snapshot: snapshots\snapshot_1752998752_speedy.jpg, Video: videos\motion_1752998751_speedy.mp4, Speedy: True"
+2025-07-20 13:35:57,"Motion detected - Size: 110x52px, Snapshot: snapshots\snapshot_1752998757_speedy.jpg, Video: videos\motion_1752998757_speedy.mp4, Speedy: True"
