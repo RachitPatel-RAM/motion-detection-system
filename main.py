@@ -24,11 +24,12 @@ from motion_detection import MotionDetector
 app = Flask(__name__)
 CORS(app)
 
-# Rate limiting
+# Rate limiting with Redis
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=os.environ.get('REDIS_URL', 'redis://localhost:6379')
 )
 
 # Load environment variables or use defaults for development
