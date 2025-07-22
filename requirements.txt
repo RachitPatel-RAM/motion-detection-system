@@ -1,9 +1,9 @@
-flask==2.0.1
+flask==2.3.3
 flask-cors==3.0.10
-flask-limiter==1.4
-opencv-python==4.5.3.56
-numpy==1.21.2
-firebase-admin==5.0.1
-cloudinary==1.28.0
-python-dotenv==0.19.0
+flask-limiter==3.4.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+cloudinary==1.38.0
+firebase-admin==6.4.0
+python-dotenv==1.0.1
 gunicorn==20.1.0
