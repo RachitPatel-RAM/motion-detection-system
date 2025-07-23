@@ -72,29 +72,42 @@ class MotionDetector:
         
         return True
         
-    def process_frame(self):
-        """Process a single frame and detect motion"""
-        if not self.cap or not self.cap.isOpened():
-            return None, False, None
-            
-        ret, frame = self.cap.read()
-        if not ret:
-            return None, False, None
-            
-        # Add frame to buffer
-        self.frame_buffer.append(frame.copy())
-        
-        # Apply real-time sharpening for better quality
-        kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-        sharpened = cv2.filter2D(frame, -1, kernel)
-        
-        gray2 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
+    def process_stream_frame(self, frame_bytes):
+        """Process a single frame from a byte stream"""
+        try:
+            # Decode frame
+            nparr = np.frombuffer(frame_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        # Frame differencing
-        delta = cv2.absdiff(self.gray1, gray2)
-        thresh = cv2.threshold(delta, self.config["threshold_sensitivity"], 255, cv2.THRESH_BINARY)[1]
-        thresh = cv2.dilate(thresh, None, iterations=2)
+            if frame is None:
+                return
+
+            # Initialize on first frame
+            if self.gray1 is None:
+                self.frame_width = frame.shape[1]
+                self.frame_height = frame.shape[0]
+                self.gray1 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                self.gray1 = cv2.GaussianBlur(self.gray1, (21, 21), 0)
+                buffer_size = int(self.config["normal_fps"] * self.config["pre_event_seconds"])
+                self.frame_buffer = deque(maxlen=buffer_size)
+
+            # Add frame to buffer
+            self.frame_buffer.append(frame.copy())
+
+            # Apply real-time sharpening for better quality
+            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+            sharpened = cv2.filter2D(frame, -1, kernel)
+
+            gray2 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
+
+            # Frame differencing
+            delta = cv2.absdiff(self.gray1, gray2)
+            thresh = cv2.threshold(delta, self.config["threshold_sensitivity"], 255, cv2.THRESH_BINARY)[1]
+            thresh = cv2.dilate(thresh, None, iterations=2)
+
+        except Exception as e:
+            print(f"Error processing stream frame: {e}")
 
         # Apply ROI mask if defined
         if self.config["roi"]:
