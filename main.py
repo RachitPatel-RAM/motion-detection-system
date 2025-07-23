@@ -83,8 +83,8 @@ email_config = {
 # JWT Secret
 jwt_secret = get_env_var('JWT_SECRET', 'r1dXIDemSne82FHr3mAbm')
 
-# Global motion detector instance
-motion_detector = None
+# Global motion detector instances (per user)
+motion_detectors = {}
 motion_thread = None
 motion_running = False
 
@@ -336,14 +336,13 @@ def send_email_alert(recipient_email, log_entry, snapshot_path):
 
 # Motion detection thread function
 def motion_detection_thread(user_id):
-    global motion_detector, motion_running
+    global motion_detectors, motion_running
     
     try:
         # Get user configuration
         user_config = user_configs.get(user_id)
         if not user_config:
             print(f"No config found for user {user_id}")
-            motion_running = False
             return
             
         # Configure motion detector
@@ -354,25 +353,23 @@ def motion_detection_thread(user_id):
             "roi": user_config["roi"]
         }
         
-        motion_detector = MotionDetector(config)
+        # Use a stream-based motion detector
+        detector = MotionDetector(config)
+        motion_detectors[user_id] = detector
         
         # Set callback
-        motion_detector.on_motion_detected = lambda data: on_motion_detected(data, user_id)
+        detector.on_motion_detected = lambda data: on_motion_detected(data, user_id)
         
-        # Start capture
-        motion_detector.start_capture()
-        
-        # Process frames until stopped
-        while motion_running:
-            frame, motion_detected, motion_data = motion_detector.process_frame()
-            time.sleep(0.03)  # ~30 FPS
+        # The thread will now wait for frames to be pushed
+        while motion_running.get(user_id, False):
+            time.sleep(0.1)
             
     except Exception as e:
-        print(f"Error in motion thread: {str(e)}")
+        print(f"Error in motion thread for user {user_id}: {str(e)}")
     finally:
-        if motion_detector:
-            motion_detector.stop()
-        motion_running = False
+        if user_id in motion_detectors:
+            motion_detectors[user_id].stop()
+            del motion_detectors[user_id]
 
 # API Routes
 @app.route('/api/start', methods=['POST'])
@@ -380,14 +377,14 @@ def motion_detection_thread(user_id):
 def start_detection(user_id):
     global motion_thread, motion_running
     
-    if motion_running:
-        return jsonify({'message': 'Motion detection already running'}), 400
+    if motion_running.get(user_id):
+        return jsonify({'message': 'Motion detection already running for this user'}), 400
         
     # Start motion detection in a separate thread
-    motion_running = True
-    motion_thread = threading.Thread(target=motion_detection_thread, args=(user_id,))
-    motion_thread.daemon = True
-    motion_thread.start()
+    motion_running[user_id] = True
+    thread = threading.Thread(target=motion_detection_thread, args=(user_id,))
+    thread.daemon = True
+    thread.start()
     
     return jsonify({'message': 'Motion detection started'})
 
@@ -396,15 +393,31 @@ def start_detection(user_id):
 def stop_detection(user_id):
     global motion_running
     
-    if not motion_running:
-        return jsonify({'message': 'Motion detection not running'}), 400
+    if not motion_running.get(user_id):
+        return jsonify({'message': 'Motion detection not running for this user'}), 400
         
     # Stop the motion detection thread
-    motion_running = False
-    if motion_thread:
-        motion_thread.join(timeout=5.0)
+    motion_running[user_id] = False
         
     return jsonify({'message': 'Motion detection stopped'})
+
+@app.route('/api/stream', methods=['POST'])
+@token_required
+def stream_frame(user_id):
+    if user_id not in motion_detectors:
+        return jsonify({'error': 'Motion detection not started for this user'}), 400
+
+    try:
+        # Get frame from request
+        frame_bytes = request.data
+        
+        # Process frame
+        detector = motion_detectors[user_id]
+        detector.process_stream_frame(frame_bytes)
+        
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/video_feed')
 @token_required
